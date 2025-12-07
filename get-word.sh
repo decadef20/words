@@ -66,6 +66,7 @@ fetch_word() {
     # Extract data using python (most reliable for JSON parsing)
     CURRENT_WORD=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('data', {}).get('word', ''))" 2>/dev/null)
     CURRENT_PRONUNCIATION=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('data', {}).get('pronunciation', ''))" 2>/dev/null)
+    CURRENT_WORD_CLASS=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('data', {}).get('wordClass', ''))" 2>/dev/null)
     CURRENT_DEFINITION=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('data', {}).get('definition', ''))" 2>/dev/null)
     CURRENT_EXAMPLE=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('data', {}).get('example', ''))" 2>/dev/null)
     PRIORITY=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('meta', {}).get('priority', ''))" 2>/dev/null)
@@ -116,10 +117,15 @@ fetch_word() {
     if [ -n "$CURRENT_PRONUNCIATION" ]; then
         echo -e "${BOLD}${BLUE}Pronunciation:${NC} ${CYAN}${CURRENT_PRONUNCIATION}${NC}"
     fi
+    if [ -n "$CURRENT_WORD_CLASS" ]; then
+        echo -e "${BOLD}${BLUE}Word Class:${NC} ${CYAN}${CURRENT_WORD_CLASS}${NC}"
+    fi
     echo ""
-    echo -e "${BOLD}${BLUE}Definition:${NC}"
-    echo -e "  ${CURRENT_DEFINITION}"
-    echo ""
+    if [ -n "$CURRENT_DEFINITION" ]; then
+        echo -e "${BOLD}${BLUE}Definition:${NC}"
+        echo -e "  ${CURRENT_DEFINITION}"
+        echo ""
+    fi
     echo -e "${BOLD}${BLUE}Example:${NC}"
     echo -e "  ${CYAN}${CURRENT_EXAMPLE}${NC}"
     echo ""
