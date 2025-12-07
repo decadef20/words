@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Configuration file for Words Memory Service
+# Copy this file to config.sh and update with your deployment URL
+# Then source it: source config.sh
+
+# For local development (default)
+# BASE_URL="http://localhost:3000"
+
+# For deployed service (uncomment and update)
+# BASE_URL="https://your-api-domain.com"
+# BASE_URL="https://words-api.herokuapp.com"
+# BASE_URL="https://words-api.vercel.app"
+
+# Export so scripts can use it
+export BASE_URL
+

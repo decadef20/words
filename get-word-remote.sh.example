@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Wrapper script for remote/deployed service
+# Copy this file and update the BASE_URL, then make it executable:
+#   cp get-word-remote.sh.example get-word-remote.sh
+#   chmod +x get-word-remote.sh
+#   # Edit get-word-remote.sh and set your BASE_URL
+#   ./get-word-remote.sh
+
+# Set your deployed service URL here
+BASE_URL="https://your-api-domain.com"
+
+# Run the main script with the configured URL
+exec "$(dirname "$0")/get-word.sh" "$BASE_URL" "$@"
+
