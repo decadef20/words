@@ -15,7 +15,7 @@ By default, scripts connect to `http://localhost:3000`:
 
 ### Option 1: Command Line Argument (Recommended)
 
-Pass the base URL as the first argument:
+Pass the base URL as the first argument. **Important: Include the port number if your service uses a non-standard port (not 80 for HTTP or 443 for HTTPS):**
 
 ```bash
 # For get-word.sh
@@ -87,6 +87,18 @@ export BASE_URL=https://your-api-domain.com
 
 ```bash
 ./get-word.sh https://api.yourdomain.com
+```
+
+### Custom Port
+
+If your service runs on a non-standard port, include it in the URL:
+
+```bash
+# HTTP with custom port
+./get-word.sh http://dev.example.com:3000
+
+# HTTPS with custom port
+./get-word.sh https://api.example.com:8443
 ```
 
 ## Testing Connection

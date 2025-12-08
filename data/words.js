@@ -1246,7 +1246,7 @@ export const words = [
     pronunciation: '/ˈmɑːdʒɪn/',
     wordClass: 'noun',
     definition: 'The edge of the paper, typically left blank when printing but sometimes used for annotations etc.',
-    example: 'The margin is the edge of the paper, typically left blank when printing but sometimes used for annotations etc..'
+    example: 'The Senate approved the use of military force by a margin of 52 votes to 47.'
   },
   {
     word: 'fringe',

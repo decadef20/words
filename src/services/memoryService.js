@@ -293,3 +293,49 @@ export const getStatistics = async () => {
   return stats;
 };
 
+/**
+ * Get daily and weekly learning statistics
+ * @returns {Promise<Object>} Daily and weekly statistics
+ */
+export const getDailyWeeklyStats = async () => {
+  const progress = await loadProgress();
+  const now = new Date();
+  
+  // Calculate start of today (00:00:00)
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  
+  // Calculate start of week (Monday 00:00:00)
+  const startOfWeek = new Date(now);
+  const dayOfWeek = startOfWeek.getDay();
+  const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+  startOfWeek.setDate(diff);
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  let wordsToday = 0;
+  let wordsThisWeek = 0;
+  
+  for (const wordProgress of Object.values(progress)) {
+    if (wordProgress.lastReviewed) {
+      const lastReviewed = new Date(wordProgress.lastReviewed);
+      
+      // Count words reviewed today
+      if (lastReviewed >= startOfToday) {
+        wordsToday++;
+      }
+      
+      // Count words reviewed this week
+      if (lastReviewed >= startOfWeek) {
+        wordsThisWeek++;
+      }
+    }
+  }
+  
+  return {
+    wordsToday,
+    wordsThisWeek,
+    startOfToday: startOfToday.toISOString(),
+    startOfWeek: startOfWeek.toISOString()
+  };
+};
+

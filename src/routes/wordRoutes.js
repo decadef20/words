@@ -3,7 +3,9 @@ import {
   getRandomWordHandler, 
   markWordKnownHandler, 
   markWordUnknownHandler,
-  getStatisticsHandler 
+  getStatisticsHandler,
+  getDailyWeeklyStatsHandler,
+  updateWordExampleHandler
 } from '../controllers/wordController.js';
 
 const router = express.Router();
@@ -35,6 +37,20 @@ router.post('/:word/unknown', markWordUnknownHandler);
  * @access  Public
  */
 router.get('/statistics', getStatisticsHandler);
+
+/**
+ * @route   GET /api/words/statistics/daily-weekly
+ * @desc    Get daily and weekly learning statistics
+ * @access  Public
+ */
+router.get('/statistics/daily-weekly', getDailyWeeklyStatsHandler);
+
+/**
+ * @route   PUT /api/words/:word/example
+ * @desc    Update the example for a word
+ * @access  Public
+ */
+router.put('/:word/example', updateWordExampleHandler);
 
 export default router;
 
