@@ -5,6 +5,7 @@ import {
   markWordUnknownHandler,
   getStatisticsHandler,
   getDailyWeeklyStatsHandler,
+  getAvailableOptionsHandler,
   updateWordExampleHandler
 } from '../controllers/wordController.js';
 
@@ -44,6 +45,13 @@ router.get('/statistics', getStatisticsHandler);
  * @access  Public
  */
 router.get('/statistics/daily-weekly', getDailyWeeklyStatsHandler);
+
+/**
+ * @route   GET /api/words/options
+ * @desc    Get available languages and categories
+ * @access  Public
+ */
+router.get('/options', getAvailableOptionsHandler);
 
 /**
  * @route   PUT /api/words/:word/example

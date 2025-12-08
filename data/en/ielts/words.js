@@ -1,4 +1,6 @@
-// English words database parsed from vocabulary.txt
+// IELTS English words database parsed from vocabulary.txt
+// Language: English (en)
+// Category: IELTS
 // Total words: 3632
 // Examples from dictionary API, vocabulary.txt, or generated
 export const words = [

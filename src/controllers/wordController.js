@@ -1,5 +1,6 @@
 import { getRandomWord, getWordWithMemoryAlgorithm, updateWordExample } from '../services/wordService.js';
 import { markWordAsKnown, markWordAsUnknown, getStatistics, getDailyWeeklyStats } from '../services/memoryService.js';
+import { getAvailableLanguages, getAvailableCategories } from '../services/wordLoader.js';
 
 /**
  * Get a word (using memory algorithm by default, or random if algorithm=false)
@@ -9,12 +10,14 @@ import { markWordAsKnown, markWordAsUnknown, getStatistics, getDailyWeeklyStats 
 export const getRandomWordHandler = async (req, res) => {
   try {
     const useAlgorithm = req.query.algorithm !== 'false';
+    const language = req.query.language || 'en';
+    const category = req.query.category || 'ielts';
     
     let wordData;
     if (useAlgorithm) {
-      wordData = await getWordWithMemoryAlgorithm();
+      wordData = await getWordWithMemoryAlgorithm(language, category);
     } else {
-      const word = getRandomWord();
+      const word = await getRandomWord(language, category);
       wordData = { ...word, priority: 'random', progress: null };
     }
     
@@ -27,7 +30,9 @@ export const getRandomWordHandler = async (req, res) => {
       meta: {
         priority,
         hasProgress: !!progress,
-        daysOverdue: daysOverdue || null
+        daysOverdue: daysOverdue || null,
+        language,
+        category
       }
     });
   } catch (error) {
@@ -47,7 +52,9 @@ export const getRandomWordHandler = async (req, res) => {
 export const markWordKnownHandler = async (req, res) => {
   try {
     const { word } = req.params;
-    const { quality } = req.body; // Optional: 3-5 (default 5)
+    const { quality, language, category } = req.body;
+    const lang = language || req.query.language || 'en';
+    const cat = category || req.query.category || 'ielts';
     
     if (!word) {
       return res.status(400).json({
@@ -56,14 +63,16 @@ export const markWordKnownHandler = async (req, res) => {
       });
     }
     
-    const progress = await markWordAsKnown(word, quality || 5);
+    const progress = await markWordAsKnown(word, quality || 5, lang, cat);
     
     res.status(200).json({
       success: true,
       message: 'Word marked as known',
       data: {
         word,
-        progress
+        progress,
+        language: lang,
+        category: cat
       }
     });
   } catch (error) {
@@ -83,6 +92,9 @@ export const markWordKnownHandler = async (req, res) => {
 export const markWordUnknownHandler = async (req, res) => {
   try {
     const { word } = req.params;
+    const { language, category } = req.body;
+    const lang = language || req.query.language || 'en';
+    const cat = category || req.query.category || 'ielts';
     
     if (!word) {
       return res.status(400).json({
@@ -91,14 +103,16 @@ export const markWordUnknownHandler = async (req, res) => {
       });
     }
     
-    const progress = await markWordAsUnknown(word);
+    const progress = await markWordAsUnknown(word, lang, cat);
     
     res.status(200).json({
       success: true,
       message: 'Word marked as unknown',
       data: {
         word,
-        progress
+        progress,
+        language: lang,
+        category: cat
       }
     });
   } catch (error) {
@@ -138,15 +152,51 @@ export const getStatisticsHandler = async (req, res) => {
  */
 export const getDailyWeeklyStatsHandler = async (req, res) => {
   try {
-    const stats = await getDailyWeeklyStats();
+    const language = req.query.language || null;
+    const category = req.query.category || null;
+    const stats = await getDailyWeeklyStats(language, category);
     res.status(200).json({
       success: true,
-      data: stats
+      data: {
+        ...stats,
+        language: language || 'all',
+        category: category || 'all'
+      }
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error fetching daily/weekly statistics',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get available languages and categories
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getAvailableOptionsHandler = async (req, res) => {
+  try {
+    const languages = await getAvailableLanguages();
+    const categoriesByLanguage = {};
+    
+    for (const lang of languages) {
+      categoriesByLanguage[lang] = await getAvailableCategories(lang);
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        languages,
+        categoriesByLanguage
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching available options',
       error: error.message
     });
   }
@@ -160,7 +210,9 @@ export const getDailyWeeklyStatsHandler = async (req, res) => {
 export const updateWordExampleHandler = async (req, res) => {
   try {
     const { word } = req.params;
-    const { example } = req.body;
+    const { example, language, category } = req.body;
+    const lang = language || req.query.language || 'en';
+    const cat = category || req.query.category || 'ielts';
     
     if (!word) {
       return res.status(400).json({
@@ -176,12 +228,16 @@ export const updateWordExampleHandler = async (req, res) => {
       });
     }
     
-    const updatedWord = await updateWordExample(word, example.trim());
+    const updatedWord = await updateWordExample(word, example.trim(), lang, cat);
     
     res.status(200).json({
       success: true,
       message: 'Word example updated successfully',
-      data: updatedWord
+      data: {
+        ...updatedWord,
+        language: lang,
+        category: cat
+      }
     });
   } catch (error) {
     res.status(500).json({

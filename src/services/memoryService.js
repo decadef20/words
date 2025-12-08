@@ -52,25 +52,44 @@ const saveProgress = async (progress) => {
 };
 
 /**
+ * Generate progress key for a word with language/category
+ * @param {string} word - The word
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
+ * @returns {string} Progress key
+ */
+const getProgressKey = (word, language = 'en', category = 'ielts') => {
+  return `${language}:${category}:${word}`;
+};
+
+/**
  * Get progress for a specific word
  * @param {string} word - The word to get progress for
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Object|null>} Progress object or null if not found
  */
-export const getWordProgress = async (word) => {
+export const getWordProgress = async (word, language = 'en', category = 'ielts') => {
   const progress = await loadProgress();
-  return progress[word] || null;
+  const key = getProgressKey(word, language, category);
+  return progress[key] || null;
 };
 
 /**
  * Initialize progress for a word (first time seeing it)
  * @param {string} word - The word to initialize
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Object>} Initial progress object
  */
-const initializeWordProgress = async (word) => {
+const initializeWordProgress = async (word, language = 'en', category = 'ielts') => {
   const progress = await loadProgress();
+  const key = getProgressKey(word, language, category);
   
   const wordProgress = {
     word,
+    language,
+    category,
     easeFactor: DEFAULT_EASE_FACTOR,
     interval: 0, // days until next review
     repetitions: 0, // number of successful reviews
@@ -79,7 +98,7 @@ const initializeWordProgress = async (word) => {
     createdAt: new Date().toISOString()
   };
   
-  progress[word] = wordProgress;
+  progress[key] = wordProgress;
   await saveProgress(progress);
   return wordProgress;
 };
@@ -136,18 +155,21 @@ const calculateNextReview = (wordProgress, quality) => {
  * Mark a word as known (user successfully recalled it)
  * @param {string} word - The word that was recalled
  * @param {number} quality - Quality of recall (3-5, where 5 is perfect)
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Object>} Updated progress object
  */
-export const markWordAsKnown = async (word, quality = 5) => {
+export const markWordAsKnown = async (word, quality = 5, language = 'en', category = 'ielts') => {
   const progress = await loadProgress();
-  let wordProgress = progress[word];
+  const key = getProgressKey(word, language, category);
+  let wordProgress = progress[key];
   
   if (!wordProgress) {
-    wordProgress = await initializeWordProgress(word);
+    wordProgress = await initializeWordProgress(word, language, category);
   }
   
   const updatedProgress = calculateNextReview(wordProgress, quality);
-  progress[word] = updatedProgress;
+  progress[key] = updatedProgress;
   await saveProgress(progress);
   
   return updatedProgress;
@@ -156,22 +178,34 @@ export const markWordAsKnown = async (word, quality = 5) => {
 /**
  * Mark a word as unknown (user failed to recall it)
  * @param {string} word - The word that was not recalled
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Object>} Updated progress object
  */
-export const markWordAsUnknown = async (word) => {
-  return markWordAsKnown(word, 0);
+export const markWordAsUnknown = async (word, language = 'en', category = 'ielts') => {
+  return markWordAsKnown(word, 0, language, category);
 };
 
 /**
  * Get words that are due for review
+ * @param {string} language - Language code (optional filter)
+ * @param {string} category - Category name (optional filter)
  * @returns {Promise<Array>} Array of words that need review
  */
-export const getWordsDueForReview = async () => {
+export const getWordsDueForReview = async (language = null, category = null) => {
   const progress = await loadProgress();
   const now = new Date();
   const dueWords = [];
   
-  for (const [word, wordProgress] of Object.entries(progress)) {
+  for (const [key, wordProgress] of Object.entries(progress)) {
+    // Filter by language/category if provided
+    if (language && wordProgress.language !== language) continue;
+    if (category && wordProgress.category !== category) continue;
+    
+    // Handle legacy format (keys without language:category prefix)
+    const isLegacyFormat = !key.includes(':');
+    const word = isLegacyFormat ? key : key.split(':').slice(2).join(':');
+    
     const nextReview = new Date(wordProgress.nextReview);
     if (nextReview <= now) {
       dueWords.push({
@@ -194,11 +228,26 @@ export const getWordsDueForReview = async () => {
 /**
  * Get all words that have never been seen
  * @param {Array} allWords - Array of all available words
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Array>} Array of words never seen
  */
-export const getNewWords = async (allWords) => {
+export const getNewWords = async (allWords, language = 'en', category = 'ielts') => {
   const progress = await loadProgress();
-  const seenWords = new Set(Object.keys(progress));
+  const seenWords = new Set();
+  
+  // Collect all seen words for this language/category
+  for (const [key, wordProgress] of Object.entries(progress)) {
+    const isLegacyFormat = !key.includes(':');
+    if (isLegacyFormat) {
+      seenWords.add(key);
+    } else {
+      const parts = key.split(':');
+      if (parts.length >= 3 && parts[0] === language && parts[1] === category) {
+        seenWords.add(parts.slice(2).join(':'));
+      }
+    }
+  }
   
   return allWords.filter(wordObj => !seenWords.has(wordObj.word));
 };
@@ -207,16 +256,18 @@ export const getNewWords = async (allWords) => {
  * Get word selection priority based on memory algorithm
  * Priority: 1. Words due for review, 2. New words, 3. Random words
  * @param {Array} allWords - Array of all available words
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Object>} Selected word with priority info
  */
-export const getWordWithPriority = async (allWords) => {
+export const getWordWithPriority = async (allWords, language = 'en', category = 'ielts') => {
   // 1. Check for words due for review (highest priority)
-  const dueWords = await getWordsDueForReview();
+  const dueWords = await getWordsDueForReview(language, category);
   if (dueWords.length > 0) {
     // Select the most overdue word
     const selectedWord = allWords.find(w => w.word === dueWords[0].word);
     if (selectedWord) {
-      const progress = await getWordProgress(selectedWord.word);
+      const progress = await getWordProgress(selectedWord.word, language, category);
       return {
         ...selectedWord,
         priority: 'review',
@@ -227,7 +278,7 @@ export const getWordWithPriority = async (allWords) => {
   }
   
   // 2. Check for new words (medium priority)
-  const newWords = await getNewWords(allWords);
+  const newWords = await getNewWords(allWords, language, category);
   if (newWords.length > 0) {
     // Randomly select from new words
     const randomIndex = Math.floor(Math.random() * newWords.length);
@@ -242,7 +293,7 @@ export const getWordWithPriority = async (allWords) => {
   // 3. Fallback to random word (lowest priority)
   const randomIndex = Math.floor(Math.random() * allWords.length);
   const selectedWord = allWords[randomIndex];
-  const progress = await getWordProgress(selectedWord.word);
+  const progress = await getWordProgress(selectedWord.word, language, category);
   
   return {
     ...selectedWord,
@@ -295,9 +346,11 @@ export const getStatistics = async () => {
 
 /**
  * Get daily and weekly learning statistics
+ * @param {string} language - Language code (optional filter)
+ * @param {string} category - Category name (optional filter)
  * @returns {Promise<Object>} Daily and weekly statistics
  */
-export const getDailyWeeklyStats = async () => {
+export const getDailyWeeklyStats = async (language = null, category = null) => {
   const progress = await loadProgress();
   const now = new Date();
   
@@ -316,6 +369,10 @@ export const getDailyWeeklyStats = async () => {
   let wordsThisWeek = 0;
   
   for (const wordProgress of Object.values(progress)) {
+    // Filter by language/category if provided
+    if (language && wordProgress.language !== language) continue;
+    if (category && wordProgress.category !== category) continue;
+    
     if (wordProgress.lastReviewed) {
       const lastReviewed = new Date(wordProgress.lastReviewed);
       

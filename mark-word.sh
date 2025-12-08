@@ -21,6 +21,10 @@ fi
 # Remove trailing slash if present
 BASE_URL="${BASE_URL%/}"
 
+# Language and category (default: en/ielts)
+LANGUAGE=${LANGUAGE:-en}
+CATEGORY=${CATEGORY:-ielts}
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -28,7 +32,8 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 if [ $# -lt 2 ]; then
-    echo -e "${RED}Usage: ./mark-word.sh <word> <known|unknown>${NC}"
+    echo -e "${RED}Usage: ./mark-word.sh <word> <known|unknown> [base_url]${NC}"
+    echo -e "${RED}       LANGUAGE=en CATEGORY=ielts ./mark-word.sh <word> <known|unknown>${NC}"
     exit 1
 fi
 
@@ -38,10 +43,15 @@ STATUS=$2
 # URL encode the word (basic version)
 ENCODED_WORD=$(echo "$WORD" | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip()))" 2>/dev/null || echo "$WORD")
 
+# Create JSON payload with language and category
+JSON_PAYLOAD=$(python3 -c "import json; print(json.dumps({'language': '${LANGUAGE}', 'category': '${CATEGORY}'}))" 2>/dev/null || echo "{\"language\": \"${LANGUAGE}\", \"category\": \"${CATEGORY}\"}")
+
 if [ "$STATUS" = "known" ]; then
-    RESPONSE=$(curl -s -X POST "${BASE_URL}/api/words/${ENCODED_WORD}/known")
+    RESPONSE=$(curl -s -X POST "${BASE_URL}/api/words/${ENCODED_WORD}/known?language=${LANGUAGE}&category=${CATEGORY}" \
+        -H "Content-Type: application/json" \
+        -d "$JSON_PAYLOAD")
     if echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); exit(0 if data.get('success') else 1)" 2>/dev/null; then
-        echo -e "${GREEN}✓ Word '${WORD}' marked as known${NC}"
+        echo -e "${GREEN}✓ Word '${WORD}' marked as known (${LANGUAGE}/${CATEGORY})${NC}"
         echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
     else
         echo -e "${RED}✗ Failed to mark word${NC}"
@@ -49,9 +59,11 @@ if [ "$STATUS" = "known" ]; then
         exit 1
     fi
 elif [ "$STATUS" = "unknown" ]; then
-    RESPONSE=$(curl -s -X POST "${BASE_URL}/api/words/${ENCODED_WORD}/unknown")
+    RESPONSE=$(curl -s -X POST "${BASE_URL}/api/words/${ENCODED_WORD}/unknown?language=${LANGUAGE}&category=${CATEGORY}" \
+        -H "Content-Type: application/json" \
+        -d "$JSON_PAYLOAD")
     if echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); exit(0 if data.get('success') else 1)" 2>/dev/null; then
-        echo -e "${YELLOW}✓ Word '${WORD}' marked as unknown${NC}"
+        echo -e "${YELLOW}✓ Word '${WORD}' marked as unknown (${LANGUAGE}/${CATEGORY})${NC}"
         echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
     else
         echo -e "${RED}✗ Failed to mark word${NC}"

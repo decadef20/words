@@ -1,17 +1,45 @@
-import { words } from '../../data/words.js';
+import { loadWords, getWordsFilePath } from './wordLoader.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const WORDS_FILE = path.join(__dirname, '../../data/words.js');
+
+// Cache for loaded words per language/category
+const wordsCache = new Map();
+
+/**
+ * Get cache key for language/category combination
+ */
+const getCacheKey = (language, category) => `${language}:${category}`;
+
+/**
+ * Get words for a specific language and category (with caching)
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
+ * @returns {Promise<Array>} Array of word objects
+ */
+const getWords = async (language = 'en', category = 'ielts') => {
+  const cacheKey = getCacheKey(language, category);
+  
+  if (wordsCache.has(cacheKey)) {
+    return wordsCache.get(cacheKey);
+  }
+  
+  const words = await loadWords(language, category);
+  wordsCache.set(cacheKey, words);
+  return words;
+};
 
 /**
  * Get a random word from the words database
- * @returns {Object} A random word object with word, pronunciation, definition, and example
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
+ * @returns {Promise<Object>} A random word object
  */
-export const getRandomWord = () => {
+export const getRandomWord = async (language = 'en', category = 'ielts') => {
+  const words = await getWords(language, category);
   const randomIndex = Math.floor(Math.random() * words.length);
   return words[randomIndex];
 };
@@ -19,19 +47,24 @@ export const getRandomWord = () => {
 /**
  * Get a word using memory algorithm (spaced repetition)
  * Prioritizes words due for review, then new words, then random
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Object>} Word object with priority and progress info
  */
-export const getWordWithMemoryAlgorithm = async () => {
+export const getWordWithMemoryAlgorithm = async (language = 'en', category = 'ielts') => {
+  const words = await getWords(language, category);
   const { getWordWithPriority } = await import('./memoryService.js');
-  return getWordWithPriority(words);
+  return getWordWithPriority(words, language, category);
 };
 
 /**
- * Get all words (for future use)
- * @returns {Array} Array of all words
+ * Get all words for a language/category
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
+ * @returns {Promise<Array>} Array of all words
  */
-export const getAllWords = () => {
-  return words;
+export const getAllWords = async (language = 'en', category = 'ielts') => {
+  return await getWords(language, category);
 };
 
 /**
@@ -50,14 +83,18 @@ const escapeJsString = (str) => {
  * Update the example for a specific word
  * @param {string} word - The word to update
  * @param {string} newExample - The new example text
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
  * @returns {Promise<Object>} Updated word object
  */
-export const updateWordExample = async (word, newExample) => {
+export const updateWordExample = async (word, newExample, language = 'en', category = 'ielts') => {
+  const words = await getWords(language, category);
+  
   // Find the word in the current words array
   const wordIndex = words.findIndex(w => w.word === word);
   
   if (wordIndex === -1) {
-    throw new Error(`Word "${word}" not found`);
+    throw new Error(`Word "${word}" not found in ${language}/${category}`);
   }
   
   // Update the word in memory
@@ -66,7 +103,12 @@ export const updateWordExample = async (word, newExample) => {
     example: newExample
   };
   
+  // Update cache
+  const cacheKey = getCacheKey(language, category);
+  wordsCache.set(cacheKey, words);
+  
   // Read the file content
+  const WORDS_FILE = getWordsFilePath(language, category);
   let fileContent = await fs.readFile(WORDS_FILE, 'utf-8');
   
   // Find the word entry using a more robust approach
@@ -90,7 +132,7 @@ export const updateWordExample = async (word, newExample) => {
     // Fallback: rebuild the entire file
     // Read the header (everything before the array)
     const headerMatch = fileContent.match(/^([^[]*)/);
-    const header = headerMatch ? headerMatch[0] : '// English words database\n// Total words: ' + words.length + '\n// Examples from dictionary API, vocabulary.txt, or generated\nexport const words = ';
+    const header = headerMatch ? headerMatch[0] : `// ${category.toUpperCase()} ${language.toUpperCase()} words database\n// Total words: ${words.length}\n// Examples from dictionary API, vocabulary.txt, or generated\nexport const words = `;
     
     // Build the words array
     const wordsArray = words.map(w => {
@@ -104,4 +146,17 @@ export const updateWordExample = async (word, newExample) => {
   await fs.writeFile(WORDS_FILE, fileContent, 'utf-8');
   
   return words[wordIndex];
+};
+
+/**
+ * Clear the words cache (useful for testing or reloading)
+ * @param {string} language - Language code (optional, clears all if not provided)
+ * @param {string} category - Category name (optional, clears all if not provided)
+ */
+export const clearCache = (language = null, category = null) => {
+  if (language && category) {
+    wordsCache.delete(getCacheKey(language, category));
+  } else {
+    wordsCache.clear();
+  }
 };

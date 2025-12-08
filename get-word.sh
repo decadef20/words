@@ -21,6 +21,10 @@ fi
 # Remove trailing slash if present
 BASE_URL="${BASE_URL%/}"
 
+# Language and category (default: en/ielts)
+LANGUAGE=${LANGUAGE:-ja}
+CATEGORY=${CATEGORY:-n5}
+
 # Colors for terminal output
 BOLD='\033[1m'
 GREEN='\033[0;32m'
@@ -54,8 +58,8 @@ CURRENT_EXAMPLE=""
 
 # Function to fetch and display a word
 fetch_word() {
-    # Fetch the word data
-    RESPONSE=$(curl -s "${BASE_URL}/api/words/random")
+    # Fetch the word data with language and category
+    RESPONSE=$(curl -s "${BASE_URL}/api/words/random?language=${LANGUAGE}&category=${CATEGORY}")
     
     # Check if response is valid
     if [ $? -ne 0 ] || [ -z "$RESPONSE" ]; then
@@ -94,6 +98,7 @@ fetch_word() {
     echo -e "${BOLD}${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${BOLD}${GREEN}║${NC}                    ${BOLD}${CYAN}📖 WORD OF THE MOMENT${NC}                   ${BOLD}${GREEN}║${NC}"
     echo -e "${BOLD}${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "  ${CYAN}${LANGUAGE}/${CATEGORY}${NC}"
     echo ""
     
     # Show review status if available
@@ -139,15 +144,24 @@ fetch_word() {
 mark_word() {
     local word=$1
     local status=$2
+    local language=${3:-$LANGUAGE}
+    local category=${4:-$CATEGORY}
     
     # URL encode the word
     local encoded_word=$(echo "$word" | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip()))" 2>/dev/null || echo "$word")
     
+    # Create JSON payload with language and category
+    local json_payload=$(python3 -c "import json; print(json.dumps({'language': '${language}', 'category': '${category}'}))" 2>/dev/null || echo "{\"language\": \"${language}\", \"category\": \"${category}\"}")
+    
     local response
     if [ "$status" = "known" ]; then
-        response=$(curl -s -X POST "${BASE_URL}/api/words/${encoded_word}/known")
+        response=$(curl -s -X POST "${BASE_URL}/api/words/${encoded_word}/known?language=${language}&category=${category}" \
+            -H "Content-Type: application/json" \
+            -d "$json_payload")
     else
-        response=$(curl -s -X POST "${BASE_URL}/api/words/${encoded_word}/unknown")
+        response=$(curl -s -X POST "${BASE_URL}/api/words/${encoded_word}/unknown?language=${language}&category=${category}" \
+            -H "Content-Type: application/json" \
+            -d "$json_payload")
     fi
     
     # Check if successful
@@ -166,8 +180,8 @@ mark_word() {
 
 # Function to show statistics
 show_statistics() {
-    # Fetch statistics
-    local response=$(curl -s "${BASE_URL}/api/words/statistics/daily-weekly")
+    # Fetch statistics with language and category
+    local response=$(curl -s "${BASE_URL}/api/words/statistics/daily-weekly?language=${LANGUAGE}&category=${CATEGORY}")
     
     # Check if response is valid
     if [ $? -ne 0 ] || [ -z "$response" ]; then
@@ -190,6 +204,8 @@ show_statistics() {
     echo -e "${BOLD}${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${BOLD}${GREEN}║${NC}                  ${BOLD}📊 LEARNING STATISTICS${NC}                    ${BOLD}${GREEN}║${NC}"
     echo -e "${BOLD}${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  ${CYAN}Language:${NC} ${BOLD}${LANGUAGE}${NC}  ${CYAN}Category:${NC} ${BOLD}${CATEGORY}${NC}"
     echo ""
     echo -e "  ${CYAN}📅 Today:${NC}     ${BOLD}${GREEN}${words_today:-0}${NC} ${CYAN}words reviewed${NC}"
     echo -e "  ${CYAN}📆 This Week:${NC} ${BOLD}${GREEN}${words_week:-0}${NC} ${CYAN}words reviewed${NC}"
@@ -224,17 +240,17 @@ update_example() {
     
     # Create JSON payload with proper escaping using python
     # Use a temporary approach that handles special characters properly
-    local json_payload=$(printf '%s' "$new_example" | python3 -c "import sys, json; print(json.dumps({'example': sys.stdin.read()}))" 2>/dev/null)
+    local json_payload=$(printf '%s' "$new_example" | python3 -c "import sys, json; print(json.dumps({'example': sys.stdin.read(), 'language': '${LANGUAGE}', 'category': '${CATEGORY}'}))" 2>/dev/null)
     
     # Fallback if python fails
     if [ -z "$json_payload" ] || [ "$json_payload" = "null" ]; then
         # Use a simpler approach: escape and wrap manually
         local escaped_example=$(printf '%s' "$new_example" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | sed 's/$/\\n/' | tr -d '\n' | sed 's/\\n$//')
-        json_payload="{\"example\": \"${escaped_example}\"}"
+        json_payload="{\"example\": \"${escaped_example}\", \"language\": \"${LANGUAGE}\", \"category\": \"${CATEGORY}\"}"
     fi
     
     # Send PUT request to update example
-    local response=$(curl -s -X PUT "${BASE_URL}/api/words/${encoded_word}/example" \
+    local response=$(curl -s -X PUT "${BASE_URL}/api/words/${encoded_word}/example?language=${LANGUAGE}&category=${CATEGORY}" \
         -H "Content-Type: application/json" \
         -d "$json_payload")
     
@@ -289,19 +305,19 @@ main() {
             
             case "$choice" in
                 k)
-                    echo -e "${GREEN}${BOLD}✓ Marking as known...${NC}"
-                    mark_word "$CURRENT_WORD" "known"
-                    echo ""
-                    sleep 0.8  # Brief pause for feedback
-                    break  # Exit menu loop to fetch next word
-                    ;;
-                u)
-                    echo -e "${YELLOW}${BOLD}✓ Marking as unknown...${NC}"
-                    mark_word "$CURRENT_WORD" "unknown"
-                    echo ""
-                    sleep 0.8  # Brief pause for feedback
-                    break  # Exit menu loop to fetch next word
-                    ;;
+                echo -e "${GREEN}${BOLD}✓ Marking as known...${NC}"
+                mark_word "$CURRENT_WORD" "known" "$LANGUAGE" "$CATEGORY"
+                echo ""
+                sleep 0.8  # Brief pause for feedback
+                break  # Exit menu loop to fetch next word
+                ;;
+            u)
+                echo -e "${YELLOW}${BOLD}✓ Marking as unknown...${NC}"
+                mark_word "$CURRENT_WORD" "unknown" "$LANGUAGE" "$CATEGORY"
+                echo ""
+                sleep 0.8  # Brief pause for feedback
+                break  # Exit menu loop to fetch next word
+                ;;
                 e)
                     echo ""
                     update_example "$CURRENT_WORD" "$CURRENT_EXAMPLE"
