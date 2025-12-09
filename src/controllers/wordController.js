@@ -51,7 +51,8 @@ export const getRandomWordHandler = async (req, res) => {
  */
 export const markWordKnownHandler = async (req, res) => {
   try {
-    const { word } = req.params;
+    // Decode URL-encoded word parameter
+    const word = decodeURIComponent(req.params.word);
     const { quality, language, category } = req.body;
     const lang = language || req.query.language || 'en';
     const cat = category || req.query.category || 'ielts';
@@ -91,7 +92,8 @@ export const markWordKnownHandler = async (req, res) => {
  */
 export const markWordUnknownHandler = async (req, res) => {
   try {
-    const { word } = req.params;
+    // Decode URL-encoded word parameter
+    const word = decodeURIComponent(req.params.word);
     const { language, category } = req.body;
     const lang = language || req.query.language || 'en';
     const cat = category || req.query.category || 'ielts';
@@ -209,7 +211,8 @@ export const getAvailableOptionsHandler = async (req, res) => {
  */
 export const updateWordExampleHandler = async (req, res) => {
   try {
-    const { word } = req.params;
+    // Decode URL-encoded word parameter
+    const word = decodeURIComponent(req.params.word);
     const { example, language, category } = req.body;
     const lang = language || req.query.language || 'en';
     const cat = category || req.query.category || 'ielts';
