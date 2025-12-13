@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Parse reading notes from text files
- * Extracts entries starting with '◆' and saves them to data directory
+ * Extracts entries starting with '◆' and converts them to word format
  */
 function parseNotesFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
@@ -15,6 +15,7 @@ function parseNotesFile(filePath) {
   const entries = [];
   
   let currentEntry = null;
+  const sourceName = path.basename(filePath, path.extname(filePath));
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -29,11 +30,14 @@ function parseNotesFile(filePath) {
       // Extract text after '◆' and trim
       const text = line.substring(1).trim();
       
-      // Create new entry
+      // Convert to word format structure compatible with wordService
+      // The text becomes the 'word' field, and we use it as the example too
       currentEntry = {
-        text: text,
-        source: path.basename(filePath, path.extname(filePath)),
-        lineNumber: i + 1
+        word: text,
+        pronunciation: '',
+        wordClass: 'phrase', // Reading notes are typically phrases or sentences
+        definition: '', // Can be filled in later if needed
+        example: text // Use the text itself as the example
       };
     } else if (currentEntry && line.length > 0) {
       // If we have a current entry and this line is not empty,
@@ -52,48 +56,99 @@ function parseNotesFile(filePath) {
 }
 
 /**
- * Parse all note files from a directory
+ * Escape string for JavaScript single-quoted string
  */
-function parseNotesDirectory(dirPath) {
-  const entries = [];
+const escapeJsString = (str) => {
+  if (!str) return '';
+  return str
+    .replace(/\\/g, '\\\\')  // Escape backslashes first
+    .replace(/'/g, "\\'")     // Escape single quotes
+    .replace(/\n/g, '\\n')     // Escape newlines
+    .replace(/\r/g, '\\r')     // Escape carriage returns
+    .replace(/\t/g, '\\t');    // Escape tabs
+};
+
+/**
+ * Save parsed entries to data directory following the structure: data/{language}/{originalName}/words.js
+ * This format is compatible with wordLoader.js which expects words.js files in data/{language}/{category}/words.js
+ * The original filename becomes the category name
+ * @param {Array} entries - Array of parsed entries (in word format)
+ * @param {string} originalFileName - Original filename without extension (becomes the category)
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (unused, originalFileName is used as category)
+ * @param {string} projectRoot - Project root directory
+ */
+function saveParsedNotes(entries, originalFileName, language = 'en', category = 'reading', projectRoot) {
+  // Create output path: data/{language}/{originalName}/words.js
+  // The original filename becomes the category name for compatibility with wordLoader
+  const outputDir = path.join(projectRoot, 'data', language, originalFileName);
+  const outputPath = path.join(outputDir, 'words.js');
   
+  // Create data directory if it doesn't exist
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
+  // Build the words array in the same format as other words.js files
+  const wordsArray = entries.map(entry => {
+    return `  {
+    word: '${escapeJsString(entry.word)}',
+    pronunciation: '${escapeJsString(entry.pronunciation)}',
+    wordClass: '${escapeJsString(entry.wordClass)}',
+    definition: '${escapeJsString(entry.definition)}',
+    example: '${escapeJsString(entry.example)}'
+  }`;
+  }).join(',\n');
+  
+  // Create JavaScript module format matching the structure of other words.js files
+  const content = `// Reading notes parsed from ${originalFileName}.txt
+// Language: ${language}
+// Category: ${originalFileName} (reading notes)
+// Total entries: ${entries.length}
+// Generated: ${new Date().toISOString()}
+export const words = [
+${wordsArray}
+];
+`;
+  
+  fs.writeFileSync(outputPath, content, 'utf-8');
+  console.log(`Saved ${entries.length} entries to ${outputPath}`);
+}
+
+/**
+ * Parse all note files from a directory and save each with its original name
+ * @param {string} dirPath - Directory path to parse
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'reading')
+ * @param {string} projectRoot - Project root directory
+ */
+function parseNotesDirectory(dirPath, language = 'en', category = 'reading', projectRoot) {
   if (!fs.existsSync(dirPath)) {
     console.log(`Directory ${dirPath} does not exist. Skipping...`);
-    return entries;
+    return;
   }
   
   const files = fs.readdirSync(dirPath);
   const txtFiles = files.filter(file => file.endsWith('.txt'));
   
+  if (txtFiles.length === 0) {
+    console.log(`No .txt files found in ${dirPath}`);
+    return;
+  }
+  
   for (const file of txtFiles) {
     const filePath = path.join(dirPath, file);
+    const originalFileName = path.basename(file, path.extname(file));
+    
     console.log(`Parsing ${filePath}...`);
-    const fileEntries = parseNotesFile(filePath);
-    entries.push(...fileEntries);
+    const entries = parseNotesFile(filePath);
+    
+    if (entries.length > 0) {
+      saveParsedNotes(entries, originalFileName, language, category, projectRoot);
+    } else {
+      console.log(`No entries found in ${filePath}`);
+    }
   }
-  
-  return entries;
-}
-
-/**
- * Save parsed entries to data directory
- */
-function saveParsedNotes(entries, outputPath) {
-  // Create data directory if it doesn't exist
-  const dataDir = path.dirname(outputPath);
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  
-  // Create JavaScript module format
-  const content = `// Reading notes parsed from notes/raws directories
-// Total entries: ${entries.length}
-// Generated: ${new Date().toISOString()}
-export const readingNotes = ${JSON.stringify(entries, null, 2)};
-`;
-  
-  fs.writeFileSync(outputPath, content, 'utf-8');
-  console.log(`Saved ${entries.length} entries to ${outputPath}`);
 }
 
 /**
@@ -103,31 +158,27 @@ function main() {
   const projectRoot = path.resolve(__dirname, '../..');
   const notesDir = path.join(projectRoot, 'notes');
   const rawsDir = path.join(projectRoot, 'raws');
-  const outputPath = path.join(projectRoot, 'data', 'readingNotes.js');
   
-  let allEntries = [];
+  let processedCount = 0;
   
-  // Parse notes directory
+  // Parse notes directory (assumed to be English reading notes)
   if (fs.existsSync(notesDir)) {
-    const notesEntries = parseNotesDirectory(notesDir);
-    allEntries.push(...notesEntries);
+    parseNotesDirectory(notesDir, 'en', 'reading', projectRoot);
+    processedCount++;
   }
   
-  // Parse raws directory if it exists
+  // Parse raws directory if it exists (assumed to be English reading notes)
   if (fs.existsSync(rawsDir)) {
-    const rawsEntries = parseNotesDirectory(rawsDir);
-    allEntries.push(...rawsEntries);
+    parseNotesDirectory(rawsDir, 'en', 'reading', projectRoot);
+    processedCount++;
   }
   
-  if (allEntries.length === 0) {
-    console.log('No entries found to parse.');
+  if (processedCount === 0) {
+    console.log('No directories found to parse.');
     return;
   }
   
-  // Save parsed entries
-  saveParsedNotes(allEntries, outputPath);
-  
-  console.log(`\nParsing complete! Found ${allEntries.length} entries.`);
+  console.log(`\nParsing complete!`);
 }
 
 // Run if called directly
