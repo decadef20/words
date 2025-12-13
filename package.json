@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "parse-notes": "node src/scripts/parseNotes.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
