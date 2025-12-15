@@ -178,6 +178,28 @@ mark_word() {
     fi
 }
 
+# Function to delete a word entry
+delete_word() {
+    local word=$1
+    local language=${2:-$LANGUAGE}
+    local category=${3:-$CATEGORY}
+
+    # URL encode the word
+    local encoded_word=$(echo "$word" | python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip()))" 2>/dev/null || echo "$word")
+
+    local response=$(curl -s -X DELETE "${BASE_URL}/api/words/${encoded_word}?language=${language}&category=${category}" \
+        -H "Accept: application/json")
+
+    if echo "$response" | python3 -c "import sys, json; data=json.load(sys.stdin); exit(0 if data.get('success') else 1)" 2>/dev/null; then
+        echo -e "${GREEN}${BOLD}✓ Word deleted (${language}/${category})${NC}"
+        return 0
+    else
+        echo -e "${RED}${BOLD}✗ Failed to delete word${NC}"
+        echo "$response" | python3 -m json.tool 2>/dev/null || echo "$response"
+        return 1
+    fi
+}
+
 # Function to show statistics
 show_statistics() {
     # Fetch statistics with language and category
@@ -287,6 +309,7 @@ main() {
             echo -e "  ${GREEN}${BOLD}[K]${NC}${GREEN}nown${NC}     ${CYAN}→${NC} I remember this word"
             echo -e "  ${YELLOW}${BOLD}[U]${NC}${YELLOW}nknown${NC}   ${CYAN}→${NC} I don't remember this word"
             echo -e "  ${BLUE}${BOLD}[E]${NC}${BLUE}dit${NC}      ${CYAN}→${NC} Update example sentence"
+            echo -e "  ${RED}${BOLD}[D]${NC}${RED}elete${NC}    ${CYAN}→${NC} Remove this word entirely"
             echo -e "  ${CYAN}${BOLD}[S]${NC}${CYAN}tatistics${NC} ${CYAN}→${NC} Show daily/weekly stats"
             echo -e "  ${BLUE}${BOLD}[N]${NC}${BLUE}ext${NC}      ${CYAN}→${NC} Skip to next word"
             echo -e "  ${RED}${BOLD}[Q]${NC}${RED}uit${NC}      ${CYAN}→${NC} Exit"
@@ -318,6 +341,21 @@ main() {
                 sleep 0.8  # Brief pause for feedback
                 break  # Exit menu loop to fetch next word
                 ;;
+        d)
+            echo -e "${RED}${BOLD}⚠ Delete '${CURRENT_WORD}'? Type 'delete' to confirm:${NC}"
+            echo -ne "${CYAN}> ${NC}"
+            read -r confirm_delete
+            if [ "$confirm_delete" = "delete" ]; then
+                delete_word "$CURRENT_WORD" "$LANGUAGE" "$CATEGORY"
+                echo ""
+                sleep 0.8
+                break  # Exit menu loop to fetch next word
+            else
+                echo -e "${YELLOW}Deletion cancelled.${NC}"
+                echo ""
+                sleep 0.5
+            fi
+            ;;
                 e)
                     echo ""
                     update_example "$CURRENT_WORD" "$CURRENT_EXAMPLE"
