@@ -396,3 +396,32 @@ export const getDailyWeeklyStats = async (language = null, category = null) => {
   };
 };
 
+/**
+ * Delete stored progress for a word (including legacy keys)
+ * @param {string} word - Word to clear
+ * @param {string} language - Language code
+ * @param {string} category - Category name
+ * @returns {Promise<boolean>} True if any progress entry was removed
+ */
+export const deleteWordProgress = async (word, language = 'en', category = 'ielts') => {
+  const progress = await loadProgress();
+  const key = getProgressKey(word, language, category);
+  const legacyKey = word; // Support legacy keys without language/category
+
+  const removedStandard = Boolean(progress[key]);
+  const removedLegacy = Boolean(progress[legacyKey]);
+
+  if (removedStandard) {
+    delete progress[key];
+  }
+  if (removedLegacy) {
+    delete progress[legacyKey];
+  }
+
+  if (removedStandard || removedLegacy) {
+    await saveProgress(progress);
+  }
+
+  return removedStandard || removedLegacy;
+};
+

@@ -68,6 +68,55 @@ export const getAllWords = async (language = 'en', category = 'ielts') => {
 };
 
 /**
+ * Delete a word from a language/category collection
+ * @param {string} word - The word to delete
+ * @param {string} language - Language code (default: 'en')
+ * @param {string} category - Category name (default: 'ielts')
+ * @returns {Promise<Object>} Deletion result
+ */
+export const deleteWord = async (word, language = 'en', category = 'ielts') => {
+  const words = await getWords(language, category);
+
+  const wordIndex = words.findIndex(w => w.word === word);
+
+  if (wordIndex === -1) {
+    throw new Error(`Word "${word}" not found in ${language}/${category}`);
+  }
+
+  const updatedWords = [
+    ...words.slice(0, wordIndex),
+    ...words.slice(wordIndex + 1)
+  ];
+
+  // Update cache with the new list
+  const cacheKey = getCacheKey(language, category);
+  wordsCache.set(cacheKey, updatedWords);
+
+  // Read existing file to preserve header/comments when rebuilding
+  const WORDS_FILE = getWordsFilePath(language, category);
+  const fileContent = await fs.readFile(WORDS_FILE, 'utf-8');
+
+  // Capture everything up to the start of the array so we keep metadata
+  const headerMatch = fileContent.match(/^[\s\S]*?export const words = /);
+  const baseHeader = headerMatch ? headerMatch[0] : `// ${category.toUpperCase()} ${language.toUpperCase()} words database\n// Total entries: ${updatedWords.length}\n// Updated: ${new Date().toISOString()}\nexport const words = `;
+
+  // Keep total count up to date if it exists in header
+  const headerWithTotals = baseHeader.replace(/Total entries:\s*\d+/i, `Total entries: ${updatedWords.length}`);
+
+  const wordsArray = updatedWords.map(w => {
+    return `  {\n    word: '${escapeJsString(w.word)}',\n    pronunciation: '${escapeJsString(w.pronunciation)}',\n    wordClass: '${escapeJsString(w.wordClass)}',\n    definition: '${escapeJsString(w.definition)}',\n    example: '${escapeJsString(w.example)}'\n  }`;
+  }).join(',\n');
+
+  const newContent = `${headerWithTotals}[\n${wordsArray}\n];`;
+  await fs.writeFile(WORDS_FILE, newContent, 'utf-8');
+
+  return {
+    removed: word,
+    remaining: updatedWords.length
+  };
+};
+
+/**
  * Escape string for JavaScript single-quoted string
  */
 const escapeJsString = (str) => {

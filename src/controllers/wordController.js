@@ -1,5 +1,5 @@
-import { getRandomWord, getWordWithMemoryAlgorithm, updateWordExample } from '../services/wordService.js';
-import { markWordAsKnown, markWordAsUnknown, getStatistics, getDailyWeeklyStats } from '../services/memoryService.js';
+import { getRandomWord, getWordWithMemoryAlgorithm, updateWordExample, deleteWord } from '../services/wordService.js';
+import { markWordAsKnown, markWordAsUnknown, getStatistics, getDailyWeeklyStats, deleteWordProgress } from '../services/memoryService.js';
 import { getAvailableLanguages, getAvailableCategories } from '../services/wordLoader.js';
 
 /**
@@ -246,6 +246,48 @@ export const updateWordExampleHandler = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error updating word example',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete a word entry (and its progress) from a language/category
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const deleteWordHandler = async (req, res) => {
+  try {
+    const word = decodeURIComponent(req.params.word);
+    const { language, category } = req.body;
+    const lang = language || req.query.language || 'en';
+    const cat = category || req.query.category || 'ielts';
+
+    if (!word) {
+      return res.status(400).json({
+        success: false,
+        message: 'Word parameter is required'
+      });
+    }
+
+    const result = await deleteWord(word, lang, cat);
+    const progressDeleted = await deleteWordProgress(word, lang, cat);
+
+    res.status(200).json({
+      success: true,
+      message: 'Word deleted successfully',
+      data: {
+        word,
+        language: lang,
+        category: cat,
+        remaining: result.remaining,
+        progressDeleted
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting word',
       error: error.message
     });
   }

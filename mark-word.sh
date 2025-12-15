@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Script to mark a word as known or unknown
+# Script to mark a word as known/unknown or delete it
 # Usage: 
-#   ./mark-word.sh <word> <known|unknown>                    # Use localhost:3000 (default)
-#   ./mark-word.sh <word> <known|unknown> https://api.example.com  # Use custom URL
-#   BASE_URL=https://api.example.com ./mark-word.sh <word> <known|unknown>  # Or use environment variable
+#   ./mark-word.sh <word> <known|unknown|delete>                    # Use localhost:3000 (default)
+#   ./mark-word.sh <word> <known|unknown|delete> https://api.example.com  # Use custom URL
+#   BASE_URL=https://api.example.com ./mark-word.sh <word> <known|unknown|delete>  # Or use environment variable
 
 # Allow BASE_URL to be set via environment variable or command line argument
 if [ -n "$3" ]; then
@@ -32,8 +32,8 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 if [ $# -lt 2 ]; then
-    echo -e "${RED}Usage: ./mark-word.sh <word> <known|unknown> [base_url]${NC}"
-    echo -e "${RED}       LANGUAGE=en CATEGORY=ielts ./mark-word.sh <word> <known|unknown>${NC}"
+    echo -e "${RED}Usage: ./mark-word.sh <word> <known|unknown|delete> [base_url]${NC}"
+    echo -e "${RED}       LANGUAGE=en CATEGORY=ielts ./mark-word.sh <word> <known|unknown|delete>${NC}"
     exit 1
 fi
 
@@ -62,7 +62,6 @@ if [ "$STATUS" = "known" ]; then
     else
         echo -e "${RED}✗ Failed to mark word${NC}"
         echo -e "${RED}Response: ${RESPONSE}${NC}"
-        # Try to extract error message
         ERROR_MSG=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('message', data.get('error', 'Unknown error')))" 2>/dev/null || echo "Check server logs")
         echo -e "${RED}Error: ${ERROR_MSG}${NC}"
         exit 1
@@ -78,13 +77,25 @@ elif [ "$STATUS" = "unknown" ]; then
     else
         echo -e "${RED}✗ Failed to mark word${NC}"
         echo -e "${RED}Response: ${RESPONSE}${NC}"
-        # Try to extract error message
+        ERROR_MSG=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('message', data.get('error', 'Unknown error')))" 2>/dev/null || echo "Check server logs")
+        echo -e "${RED}Error: ${ERROR_MSG}${NC}"
+        exit 1
+    fi
+elif [ "$STATUS" = "delete" ]; then
+    RESPONSE=$(curl -s -X DELETE "${BASE_URL}/api/words/${ENCODED_WORD}?language=${LANGUAGE}&category=${CATEGORY}" \
+        -H "Accept: application/json")
+    if echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); exit(0 if data.get('success') else 1)" 2>/dev/null; then
+        echo -e "${GREEN}✓ Word '${WORD}' deleted (${LANGUAGE}/${CATEGORY})${NC}"
+        echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
+    else
+        echo -e "${RED}✗ Failed to delete word${NC}"
+        echo -e "${RED}Response: ${RESPONSE}${NC}"
         ERROR_MSG=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('message', data.get('error', 'Unknown error')))" 2>/dev/null || echo "Check server logs")
         echo -e "${RED}Error: ${ERROR_MSG}${NC}"
         exit 1
     fi
 else
-    echo -e "${RED}Invalid status. Use 'known' or 'unknown'${NC}"
+    echo -e "${RED}Invalid status. Use 'known', 'unknown', or 'delete'${NC}"
     exit 1
 fi
 

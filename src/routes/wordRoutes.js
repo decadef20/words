@@ -6,7 +6,8 @@ import {
   getStatisticsHandler,
   getDailyWeeklyStatsHandler,
   getAvailableOptionsHandler,
-  updateWordExampleHandler
+  updateWordExampleHandler,
+  deleteWordHandler
 } from '../controllers/wordController.js';
 
 const router = express.Router();
@@ -59,6 +60,13 @@ router.get('/options', getAvailableOptionsHandler);
  * @access  Public
  */
 router.put('/:word/example', updateWordExampleHandler);
+
+/**
+ * @route   DELETE /api/words/:word
+ * @desc    Delete a word entry (and its progress)
+ * @access  Public
+ */
+router.delete('/:word', deleteWordHandler);
 
 export default router;
 
